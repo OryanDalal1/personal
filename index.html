@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>משחק הזיכרון של החיות</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#9b8cf2">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="זיכרון חיות">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root {
+    --ink: #2d2a4a;
+    --paper: #fffaf3;
+    --pink: #ff9db1;
+    --green: #8fe3a8;
+    --yellow: #ffd37a;
+    --sky: #b9defa;
+    --purple: #9b8cf2;
+    --purple-dark: #6f5fd6;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Rubik", "Heebo", "Varela Round", "Arial Rounded MT Bold", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 15% 10%, #ffe9f0 0, transparent 40%),
+      radial-gradient(circle at 85% 20%, #e3f4ff 0, transparent 40%),
+      radial-gradient(circle at 50% 100%, #fff3cf 0, transparent 50%),
+      var(--paper);
+    touch-action: manipulation;
+    overflow: hidden;
+  }
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column; padding: max(12px, env(safe-area-inset-top)) 14px max(12px, env(safe-area-inset-bottom)); }
+  .screen.active { display: flex; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 4px solid var(--purple-dark); outline-offset: 3px; }
+
+  /* ---------- start screen ---------- */
+  #start { align-items: center; justify-content: center; text-align: center; gap: 18px; overflow-y: auto; }
+  #start h1 { margin: 0; font-size: clamp(30px, 7vw, 52px); line-height: 1.1; }
+  #start p.sub { margin: 0; font-size: clamp(17px, 3.6vw, 22px); opacity: .8; }
+  .zoo { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; max-width: 560px; }
+  .zoo .mini { width: clamp(52px, 13vw, 76px); height: clamp(52px, 13vw, 76px); border-radius: 22%; padding: 4px; box-shadow: 0 4px 0 rgba(45,42,74,.12); animation: bob 2.6s ease-in-out infinite; }
+  .zoo .mini:nth-child(2n) { animation-delay: .4s; }
+  .zoo .mini:nth-child(3n) { animation-delay: .9s; }
+  .zoo .mini svg { width: 100%; height: 100%; display: block; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .levels { display: grid; gap: 14px; width: min(440px, 100%); }
+  .level-btn {
+    border: 0; border-radius: 26px; padding: 14px 18px;
+    display: flex; align-items: center; gap: 14px; text-align: start;
+    background: var(--c); box-shadow: 0 7px 0 rgba(45,42,74,.2);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .level-btn:active { transform: translateY(5px); box-shadow: 0 2px 0 rgba(45,42,74,.2); }
+  .level-btn .em { font-size: 40px; line-height: 1; }
+  .level-btn .txt { display: flex; flex-direction: column; gap: 2px; }
+  .level-btn .name { font-size: clamp(24px, 5.5vw, 30px); font-weight: 800; }
+  .level-btn .pairs { font-size: 17px; font-weight: 600; }
+  .level-btn .best { font-size: 15px; font-weight: 500; opacity: .85; }
+
+  /* ---------- game screen ---------- */
+  #game { gap: 10px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .stats { display: flex; gap: 8px; }
+  .pill { background: #fff; border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: clamp(16px, 4vw, 20px); box-shadow: 0 3px 0 rgba(45,42,74,.12); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pill small { font-weight: 600; opacity: .7; margin-inline-end: 6px; font-size: .8em; }
+  .tools { display: flex; gap: 8px; }
+  .tool { border: 0; background: #fff; border-radius: 999px; min-width: 48px; height: 48px; padding: 0 14px; font-weight: 700; font-size: 17px; box-shadow: 0 3px 0 rgba(45,42,74,.12); }
+  .tool:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(45,42,74,.12); }
+  #levelTag { text-align: center; font-weight: 800; font-size: 17px; opacity: .75; }
+
+  #boardWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  #board { display: grid; justify-content: center; align-content: center; }
+
+  .card { width: var(--s); height: var(--s); padding: 0; border: 0; background: none; perspective: 700px; }
+  .inner { position: relative; width: 100%; height: 100%; transition: transform .45s cubic-bezier(.3,.7,.3,1.2); transform-style: preserve-3d; }
+  .card.flipped .inner, .card.matched .inner { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; border-radius: 20%; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 0 rgba(45,42,74,.18); overflow: hidden; }
+  .back { background: linear-gradient(145deg, #b6a9ff, #8a7aea); border: 3px solid #fff; }
+  .back svg { width: 58%; height: 58%; opacity: .9; }
+  .front { transform: rotateY(180deg); background: var(--bg); border: 3px solid #fff; }
+  .front svg { width: 88%; height: 88%; }
+  .card.matched .front { box-shadow: 0 0 0 4px #ffd54a, 0 5px 0 rgba(45,42,74,.18); animation: pop .5s ease .35s; }
+  .card.wrong .front { animation: shake .45s ease .3s; }
+  .card:disabled { cursor: default; }
+  @keyframes pop { 0% { transform: rotateY(180deg) scale(1); } 40% { transform: rotateY(180deg) scale(1.14); } 100% { transform: rotateY(180deg) scale(1); } }
+  @keyframes shake { 0%, 100% { transform: rotateY(180deg) translateX(0); } 25% { transform: rotateY(180deg) translateX(-6px); } 75% { transform: rotateY(180deg) translateX(6px); } }
+
+  /* ---------- win overlay ---------- */
+  #win { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(45,42,74,.45); padding: 16px; z-index: 20; }
+  #win.show { display: flex; }
+  .modal { background: #fff; border-radius: 32px; padding: 22px 20px 20px; width: min(400px, 100%); text-align: center; box-shadow: 0 12px 0 rgba(45,42,74,.2); animation: rise .5s cubic-bezier(.3,.7,.3,1.3); }
+  @keyframes rise { from { transform: translateY(40px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal .hero { width: 120px; height: 120px; margin: 0 auto 4px; border-radius: 28%; padding: 6px; animation: bob 2s ease-in-out infinite; }
+  .modal .hero svg { width: 100%; height: 100%; }
+  .modal h2 { margin: 6px 0; font-size: 34px; }
+  .modal .res { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+  .modal .record { margin: 6px 0 12px; font-weight: 800; font-size: 20px; color: #b36b00; min-height: 1.4em; }
+  .modal .btns { display: grid; gap: 10px; }
+  .big { border: 0; border-radius: 22px; padding: 14px; font-weight: 800; font-size: 22px; box-shadow: 0 5px 0 rgba(45,42,74,.2); }
+  .big.primary { background: var(--green); }
+  .big.second { background: var(--sky); }
+  .big:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(45,42,74,.2); }
+
+  #confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 30; }
+  #confetti i { position: absolute; top: -20px; width: 10px; height: 16px; border-radius: 3px; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .inner { transition: transform .01s; }
+    .zoo .mini, .modal .hero, .modal { animation: none; }
+    .card.matched .front, .card.wrong .front { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<main id="start" class="screen active" aria-label="מסך פתיחה">
+  <h1>משחק הזיכרון<br>של החיות</h1>
+  <div class="zoo" id="zoo" aria-hidden="true"></div>
+  <p class="sub">מצאו את הזוגות! בחרו רמה:</p>
+  <div class="levels" id="levels"></div>
+</main>
+
+<section id="game" class="screen" aria-label="המשחק">
+  <div class="bar">
+    <div class="stats">
+      <div class="pill"><small>מהלכים</small><span id="moves">0</span></div>
+      <div class="pill"><small>זמן</small><span id="time">0:00</span></div>
+    </div>
+    <div class="tools">
+      <button class="tool" id="btnMute" aria-label="השתקת צלילים" title="צלילים">🔊</button>
+      <button class="tool" id="btnRestart" aria-label="משחק חדש">🔄 חדש</button>
+      <button class="tool" id="btnHome" aria-label="חזרה לבחירת רמה">🏠</button>
+    </div>
+  </div>
+  <div id="levelTag"></div>
+  <div id="boardWrap"><div id="board" role="group" aria-label="לוח הקלפים"></div></div>
+  <div id="status" class="sr-only" aria-live="polite"></div>
+</section>
+
+<div id="win" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="modal">
+    <div class="hero" id="winHero"></div>
+    <h2 id="winTitle">כל הכבוד!</h2>
+    <div class="res">
+      <div class="pill"><small>מהלכים</small><span id="winMoves">0</span></div>
+      <div class="pill"><small>זמן</small><span id="winTime">0:00</span></div>
+    </div>
+    <div class="record" id="winRecord"></div>
+    <div class="btns">
+      <button class="big primary" id="btnAgain">שחקו שוב</button>
+      <button class="big second" id="btnLevels">בחירת רמה</button>
+    </div>
+  </div>
+</div>
+<div id="confetti" aria-hidden="true"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* =============== Animal illustrations (SVG, viewBox 0 0 100 100) =============== */
+  const DK = '#2b2b3a';
+  const eye = (x, y, r = 6) =>
+    `<circle cx="${x}" cy="${y}" r="${r}" fill="${DK}"/><circle cx="${x + r * .32}" cy="${y - r * .36}" r="${r * .4}" fill="#fff"/><circle cx="${x - r * .35}" cy="${y + r * .35}" r="${r * .18}" fill="#fff" opacity=".8"/>`;
+  const eyes = (y = 54, dx = 14, r = 6) => eye(50 - dx - 0, y, r) + eye(50 + dx, y, r);
+  const cheeks = (x = 24, y = 66, r = 6) =>
+    `<circle cx="${x}" cy="${y}" r="${r}" fill="#ff8fa3" opacity=".55"/><circle cx="${100 - x}" cy="${y}" r="${r}" fill="#ff8fa3" opacity=".55"/>`;
+  const stroke = (d, w = 2.5) => `<path d="${d}" stroke="${DK}" stroke-width="${w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const mouthW = (y) => stroke(`M50 ${y} v3 M50 ${y + 3} Q44 ${y + 9} 40 ${y + 4} M50 ${y + 3} Q56 ${y + 9} 60 ${y + 4}`);
+
+  const lionMane = (() => {
+    let s = '';
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      s += `<circle cx="${(50 + 34 * Math.cos(a)).toFixed(1)}" cy="${(52 + 34 * Math.sin(a)).toFixed(1)}" r="11" fill="#c2702a"/>`;
+    }
+    return s + `<circle cx="50" cy="52" r="34" fill="#c2702a"/>`;
+  })();
+
+  const ANIMALS = [
+    { id: 'cat', name: 'חתול', bg: '#ffe2c4', svg:
+      `<polygon points="18,42 22,10 46,26" fill="#f4a259"/><polygon points="82,42 78,10 54,26" fill="#f4a259"/>
+       <polygon points="24,36 26,19 40,27" fill="#ffb3c1"/><polygon points="76,36 74,19 60,27" fill="#ffb3c1"/>
+       <circle cx="50" cy="58" r="36" fill="#f4a259"/>
+       ${stroke('M50 24 v9 M41 26 l3 7 M59 26 l-3 7', 3).replace(DK, '#d9822b')}
+       <ellipse cx="50" cy="69" rx="14" ry="10" fill="#ffe3c2"/>
+       ${eyes(54)}${cheeks(22, 66)}
+       <polygon points="46,62 54,62 50,67" fill="#ff6f91"/>
+       ${stroke('M50 67 v2 M50 69 Q45 74 41 70 M50 69 Q55 74 59 70', 2.2)}
+       ${stroke('M10 60 L28 65 M10 71 L28 69 M90 60 L72 65 M90 71 L72 69', 1.6)}` },
+
+    { id: 'dog', name: 'כלב', bg: '#f6e3cf', svg:
+      `<ellipse cx="17" cy="48" rx="12" ry="24" fill="#8d5a3b" transform="rotate(12 17 48)"/>
+       <ellipse cx="83" cy="48" rx="12" ry="24" fill="#8d5a3b" transform="rotate(-12 83 48)"/>
+       <circle cx="50" cy="55" r="34" fill="#d9a066"/>
+       <circle cx="65" cy="49" r="12" fill="#8d5a3b" opacity=".9"/>
+       <ellipse cx="50" cy="68" rx="18" ry="14" fill="#ffe8cc"/>
+       ${eye(36, 50)}${eye(64, 50)}${cheeks(22, 64, 5)}
+       <ellipse cx="50" cy="62" rx="7" ry="5" fill="${DK}"/><ellipse cx="48" cy="60.5" rx="2" ry="1.2" fill="#fff" opacity=".7"/>
+       <path d="M45 73 Q50 85 55 73 Z" fill="#ff6f91"/>
+       ${stroke('M50 67 v4 M50 71 Q44 77 40 72 M50 71 Q56 77 60 72', 2.2)}` },
+
+    { id: 'bunny', name: 'ארנב', bg: '#ffe3ee', svg:
+      `<ellipse cx="35" cy="24" rx="10" ry="25" fill="#fff" stroke="#e4d8ee" stroke-width="2"/>
+       <ellipse cx="65" cy="24" rx="10" ry="25" fill="#fff" stroke="#e4d8ee" stroke-width="2"/>
+       <ellipse cx="35" cy="27" rx="5" ry="17" fill="#ffc2d1"/><ellipse cx="65" cy="27" rx="5" ry="17" fill="#ffc2d1"/>
+       <circle cx="50" cy="62" r="32" fill="#fff" stroke="#e4d8ee" stroke-width="2"/>
+       ${eye(37, 58)}${eye(63, 58)}${cheeks(25, 68, 6)}
+       <ellipse cx="50" cy="66" rx="4.5" ry="3.2" fill="#ff8fa3"/>
+       <rect x="45.5" y="72" width="9" height="9" rx="2.5" fill="#fff" stroke="#d6cce0" stroke-width="1.5"/>
+       ${stroke('M50 69 v3 M50 71 Q44 77 40 73 M50 71 Q56 77 60 73', 2.2)}` },
+
+    { id: 'bear', name: 'דוב', bg: '#f2dfcc', svg:
+      `<circle cx="22" cy="28" r="13" fill="#9b6b43"/><circle cx="78" cy="28" r="13" fill="#9b6b43"/>
+       <circle cx="22" cy="28" r="7" fill="#e3b98f"/><circle cx="78" cy="28" r="7" fill="#e3b98f"/>
+       <circle cx="50" cy="56" r="35" fill="#b9814f"/>
+       <ellipse cx="50" cy="68" rx="16" ry="13" fill="#ecd0aa"/>
+       ${eyes(52, 15)}${cheeks(22, 64, 5.5)}
+       <ellipse cx="50" cy="63" rx="6.5" ry="4.8" fill="#3b2a20"/><ellipse cx="48.2" cy="61.6" rx="2" ry="1.2" fill="#fff" opacity=".6"/>
+       ${stroke('M50 67 v4 M50 71 Q44 76 40 72 M50 71 Q56 76 60 72', 2.2)}` },
+
+    { id: 'panda', name: 'פנדה', bg: '#e4eefc', svg:
+      `<circle cx="22" cy="26" r="13" fill="${DK}"/><circle cx="78" cy="26" r="13" fill="${DK}"/>
+       <circle cx="50" cy="57" r="35" fill="#fff" stroke="#e1e1ec" stroke-width="2"/>
+       <ellipse cx="35" cy="53" rx="10" ry="13" fill="${DK}" transform="rotate(22 35 53)"/>
+       <ellipse cx="65" cy="53" rx="10" ry="13" fill="${DK}" transform="rotate(-22 65 53)"/>
+       <circle cx="36" cy="52" r="5.5" fill="#fff"/><circle cx="64" cy="52" r="5.5" fill="#fff"/>
+       <circle cx="37" cy="52.5" r="3.2" fill="${DK}"/><circle cx="63" cy="52.5" r="3.2" fill="${DK}"/>
+       <circle cx="38" cy="51" r="1.1" fill="#fff"/><circle cx="64" cy="51" r="1.1" fill="#fff"/>
+       ${cheeks(24, 68, 5.5)}
+       <ellipse cx="50" cy="65" rx="6.5" ry="4.6" fill="${DK}"/><ellipse cx="48.2" cy="63.6" rx="2" ry="1.1" fill="#fff" opacity=".6"/>
+       ${stroke('M50 69 v3 M50 72 Q44 77 40 73 M50 72 Q56 77 60 73', 2.2)}` },
+
+    { id: 'fox', name: 'שועל', bg: '#ffe0cc', svg:
+      `<polygon points="13,48 19,8 46,26" fill="#ef7d3c"/><polygon points="87,48 81,8 54,26" fill="#ef7d3c"/>
+       <polygon points="21,38 23,19 37,28" fill="#3b2a20"/><polygon points="79,38 77,19 63,28" fill="#3b2a20"/>
+       <path d="M50 90 C22 90 9 68 11 52 C13 34 30 24 50 24 C70 24 87 34 89 52 C91 68 78 90 50 90Z" fill="#ef7d3c"/>
+       <path d="M11 54 C28 56 40 72 50 90 C60 72 72 56 89 54 C88 74 74 90 50 90 C26 90 12 74 11 54Z" fill="#fff"/>
+       ${eyes(52, 15)}${cheeks(24, 66, 5.5)}
+       <ellipse cx="50" cy="77" rx="5.5" ry="4" fill="${DK}"/>
+       ${stroke('M50 81 Q45 86 41 82 M50 81 Q55 86 59 82', 2)}` },
+
+    { id: 'lion', name: 'אריה', bg: '#fff0c2', svg:
+      `${lionMane}
+       <circle cx="29" cy="33" r="8" fill="#f6c36b"/><circle cx="71" cy="33" r="8" fill="#f6c36b"/>
+       <circle cx="29" cy="33" r="4" fill="#e8a14d"/><circle cx="71" cy="33" r="4" fill="#e8a14d"/>
+       <circle cx="50" cy="57" r="28" fill="#f6c36b"/>
+       ${eyes(53, 12, 5)}${cheeks(30, 65, 5)}
+       <ellipse cx="50" cy="68" rx="12" ry="9" fill="#ffe8bf"/>
+       <polygon points="45,62 55,62 50,68" fill="#b5523b"/>
+       ${stroke('M50 68 v3 M50 71 Q45 76 41 72 M50 71 Q55 76 59 72', 2.2)}` },
+
+    { id: 'pig', name: 'חזרזיר', bg: '#ffdce8', svg:
+      `<polygon points="19,42 14,14 44,28" fill="#ff9eb5"/><polygon points="81,42 86,14 56,28" fill="#ff9eb5"/>
+       <polygon points="23,36 21,21 37,29" fill="#ff7fa0"/><polygon points="77,36 79,21 63,29" fill="#ff7fa0"/>
+       <circle cx="50" cy="57" r="35" fill="#ffb3c6"/>
+       ${eye(34, 50)}${eye(66, 50)}${cheeks(20, 63, 5.5)}
+       <ellipse cx="50" cy="66" rx="15" ry="11.5" fill="#ff8fab"/>
+       <ellipse cx="44.5" cy="66" rx="2.8" ry="4.6" fill="#c2456b"/><ellipse cx="55.5" cy="66" rx="2.8" ry="4.6" fill="#c2456b"/>` },
+
+    { id: 'frog', name: 'צפרדע', bg: '#dff6d4', svg:
+      `<circle cx="50" cy="62" r="33" fill="#7ed36b"/>
+       <circle cx="29" cy="31" r="15" fill="#7ed36b"/><circle cx="71" cy="31" r="15" fill="#7ed36b"/>
+       <circle cx="29" cy="31" r="10.5" fill="#fff"/><circle cx="71" cy="31" r="10.5" fill="#fff"/>
+       <circle cx="30" cy="32" r="6" fill="${DK}"/><circle cx="72" cy="32" r="6" fill="${DK}"/>
+       <circle cx="32" cy="30" r="2.2" fill="#fff"/><circle cx="74" cy="30" r="2.2" fill="#fff"/>
+       <circle cx="45" cy="56" r="1.9" fill="#3b8a35"/><circle cx="55" cy="56" r="1.9" fill="#3b8a35"/>
+       ${cheeks(22, 68, 6)}
+       ${stroke('M28 66 Q50 88 72 66', 3)}` },
+
+    { id: 'penguin', name: 'פינגווין', bg: '#d9ecfb', svg:
+      `<ellipse cx="50" cy="56" rx="37" ry="38" fill="#3d4a6b"/>
+       <path d="M50 30 C38 24 22 36 24 56 C26 76 38 90 50 90 C62 90 74 76 76 56 C78 36 62 24 50 30Z" fill="#fff"/>
+       ${eye(38, 50, 5.5)}${eye(62, 50, 5.5)}${cheeks(29, 62, 5)}
+       <path d="M42 58 Q50 54 58 58 Q56 70 50 72 Q44 70 42 58Z" fill="#ffa62b"/>
+       <path d="M44 61 Q50 63 56 61" stroke="#e58a0c" stroke-width="1.6" fill="none" stroke-linecap="round"/>` },
+
+    { id: 'owl', name: 'ינשוף', bg: '#efe0d0', svg:
+      `<polygon points="19,38 15,9 43,24" fill="#8a5a3c"/><polygon points="81,38 85,9 57,24" fill="#8a5a3c"/>
+       <circle cx="50" cy="58" r="37" fill="#a8744d"/>
+       <ellipse cx="50" cy="80" rx="20" ry="12" fill="#e8c9a0"/>
+       <path d="M44 78 q3 3 6 0 q3 3 6 0" stroke="#c9a273" stroke-width="2" fill="none" stroke-linecap="round"/>
+       <circle cx="33" cy="52" r="17" fill="#fff3d6" stroke="#d9b982" stroke-width="2"/>
+       <circle cx="67" cy="52" r="17" fill="#fff3d6" stroke="#d9b982" stroke-width="2"/>
+       <circle cx="34" cy="53" r="9" fill="${DK}"/><circle cx="66" cy="53" r="9" fill="${DK}"/>
+       <circle cx="37" cy="50" r="3" fill="#fff"/><circle cx="69" cy="50" r="3" fill="#fff"/>
+       <polygon points="44,62 56,62 50,73" fill="#ffa62b"/>` },
+
+    { id: 'koala', name: 'קואלה', bg: '#e6e8f2', svg:
+      `<circle cx="17" cy="38" r="17" fill="#a9aab9"/><circle cx="83" cy="38" r="17" fill="#a9aab9"/>
+       <circle cx="17" cy="38" r="9" fill="#f0e6ec"/><circle cx="83" cy="38" r="9" fill="#f0e6ec"/>
+       <circle cx="50" cy="58" r="33" fill="#bdbecb"/>
+       ${eye(35, 52, 5.5)}${eye(65, 52, 5.5)}${cheeks(24, 68, 5.5)}
+       <ellipse cx="50" cy="62" rx="9.5" ry="12.5" fill="#3a3a48"/><ellipse cx="47" cy="57" rx="3" ry="2" fill="#fff" opacity=".5"/>
+       ${stroke('M50 75 Q45 80 41 77 M50 75 Q55 80 59 77', 2.2)}` },
+
+    { id: 'cow', name: 'פרה', bg: '#e8f0fb', svg:
+      `<ellipse cx="31" cy="20" rx="5" ry="8.5" fill="#f5deb3" transform="rotate(-20 31 20)"/>
+       <ellipse cx="69" cy="20" rx="5" ry="8.5" fill="#f5deb3" transform="rotate(20 69 20)"/>
+       <ellipse cx="13" cy="40" rx="14" ry="8" fill="#fff" stroke="#dcdce6" stroke-width="2" transform="rotate(-22 13 40)"/>
+       <ellipse cx="87" cy="40" rx="14" ry="8" fill="#fff" stroke="#dcdce6" stroke-width="2" transform="rotate(22 87 40)"/>
+       <ellipse cx="14" cy="41" rx="8" ry="4" fill="#ffc2d1" transform="rotate(-22 14 41)"/>
+       <ellipse cx="86" cy="41" rx="8" ry="4" fill="#ffc2d1" transform="rotate(22 86 41)"/>
+       <circle cx="50" cy="52" r="34" fill="#fff" stroke="#dcdce6" stroke-width="2"/>
+       <path d="M25 36 Q38 20 54 30 Q52 42 38 44 Q24 46 25 36Z" fill="${DK}"/>
+       ${eye(35, 54, 5.5)}${eye(65, 54, 5.5)}${cheeks(22, 64, 5)}
+       <ellipse cx="50" cy="72" rx="21" ry="14" fill="#ffb3c6"/>
+       <ellipse cx="42.5" cy="72" rx="3" ry="4.5" fill="#c2456b"/><ellipse cx="57.5" cy="72" rx="3" ry="4.5" fill="#c2456b"/>` },
+
+    { id: 'monkey', name: 'קוף', bg: '#f1e1d2', svg:
+      `<circle cx="15" cy="52" r="13" fill="#8b5a3c"/><circle cx="85" cy="52" r="13" fill="#8b5a3c"/>
+       <circle cx="15" cy="52" r="7" fill="#f2c9a0"/><circle cx="85" cy="52" r="7" fill="#f2c9a0"/>
+       <circle cx="50" cy="52" r="35" fill="#8b5a3c"/>
+       <path d="M50 46 C46 34 24 34 24 54 C24 74 40 88 50 88 C60 88 76 74 76 54 C76 34 54 34 50 46Z" fill="#f2c9a0"/>
+       ${eye(38, 54, 5)}${eye(62, 54, 5)}${cheeks(31, 66, 4.5)}
+       <circle cx="46.5" cy="68" r="1.7" fill="#8b5a3c"/><circle cx="53.5" cy="68" r="1.7" fill="#8b5a3c"/>
+       ${stroke('M40 75 Q50 84 60 75', 2.4)}` },
+  ];
+  const svgOf = (a) => `<svg viewBox="0 0 100 100" role="img" aria-hidden="true">${a.svg}</svg>`;
+
+  /* =============== Levels =============== */
+  const LEVELS = {
+    easy:   { label: 'קל',    pairs: 6,  color: '#8fe3a8', em: '🐣' },
+    medium: { label: 'בינוני', pairs: 10, color: '#ffd37a', em: '🦊' },
+    hard:   { label: 'קשה',   pairs: 14, color: '#ff9db1', em: '🦁' },
+  };
+
+  /* =============== Helpers =============== */
+  const $ = (id) => document.getElementById(id);
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- best scores (localStorage, safe) ---- */
+  const KEY = 'animal-memory-best-v1';
+  let bestMem = {};
+  const loadBest = () => {
+    try { return Object.assign({}, bestMem, JSON.parse(localStorage.getItem(KEY) || '{}')); }
+    catch (e) { return bestMem; }
+  };
+  const saveBest = (b) => {
+    bestMem = b;
+    try { localStorage.setItem(KEY, JSON.stringify(b)); } catch (e) { /* ignore */ }
+  };
+  const isBetter = (n, old) => !old || n.moves < old.moves || (n.moves === old.moves && n.time < old.time);
+
+  /* =============== Sound (Web Audio, no files) =============== */
+  let actx = null, muted = false;
+  const audio = () => {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
+    if (actx && actx.state === 'suspended') actx.resume();
+    return actx;
+  };
+  const tone = (freq, at, dur, type = 'sine', vol = 0.16) => {
+    if (muted) return;
+    const c = audio(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq;
+    const t = c.currentTime + at;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  };
+  const sfx = {
+    flip:  () => tone(520, 0, 0.09, 'triangle', 0.12),
+    match: () => { tone(660, 0, 0.14); tone(880, 0.11, 0.14); tone(1100, 0.22, 0.22); },
+    wrong: () => { tone(230, 0, 0.18, 'sawtooth', 0.07); tone(180, 0.14, 0.22, 'sawtooth', 0.07); },
+    win:   () => [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => tone(f, i * 0.14, 0.28, 'triangle', 0.17)),
+  };
+
+  /* =============== Confetti =============== */
+  const confetti = () => {
+    if (reduceMotion) return;
+    const box = $('confetti');
+    const colors = ['#ff9db1', '#ffd37a', '#8fe3a8', '#b9defa', '#9b8cf2', '#ffb347'];
+    for (let i = 0; i < 90; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDuration = 2.2 + Math.random() * 2.2 + 's';
+      p.style.animationDelay = Math.random() * 0.8 + 's';
+      p.style.transform = `rotate(${Math.random() * 360}deg)`;
+      box.appendChild(p);
+    }
+    setTimeout(() => { box.textContent = ''; }, 5500);
+  };
+
+  /* ---- random placement, with no pair sitting side by side in any possible grid ---- */
+  const spreadDeck = (animals) => {
+    const base = animals.flatMap((a) => [a, a]);
+    const n = base.length;
+    const colsOptions = [];
+    for (let c = 3; c <= 7; c++) if (n % c === 0) colsOptions.push(c);
+    const touching = (i, j, c) =>
+      Math.abs(Math.floor(i / c) - Math.floor(j / c)) + Math.abs((i % c) - (j % c)) === 1;
+    const ok = (d) => {
+      const seen = {};
+      for (let i = 0; i < n; i++) {
+        const id = d[i].id;
+        if (id in seen) {
+          const j = seen[id];
+          if (Math.abs(i - j) === 1 || colsOptions.some((c) => touching(i, j, c))) return false;
+        } else seen[id] = i;
+      }
+      return true;
+    };
+    let d = shuffle(base);
+    for (let t = 0; t < 5000 && !ok(d); t++) d = shuffle(base);
+    return d;
+  };
+
+  /* =============== State =============== */
+  let level = 'easy', deck = [], first = null, lock = false, moves = 0, found = 0;
+  let started = false, t0 = 0, timerId = null, gameToken = 0, elapsed = 0;
+
+  const show = (id) => {
+    document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
+  };
+
+  /* =============== Start screen =============== */
+  const renderStart = () => {
+    const best = loadBest();
+    const wrap = $('levels');
+    wrap.textContent = '';
+    for (const [key, L] of Object.entries(LEVELS)) {
+      const b = best[key];
+      const btn = document.createElement('button');
+      btn.className = 'level-btn';
+      btn.style.setProperty('--c', L.color);
+      btn.innerHTML = `<span class="em" aria-hidden="true">${L.em}</span>
+        <span class="txt"><span class="name">${L.label}</span>
+        <span class="pairs">${L.pairs} זוגות</span>
+        <span class="best">${b ? `🏆 שיא: ${b.moves} מהלכים · ${fmt(b.time)}` : 'עדיין אין שיא'}</span></span>`;
+      btn.addEventListener('click', () => { audio(); startGame(key); });
+      wrap.appendChild(btn);
+    }
+    const zoo = $('zoo');
+    if (!zoo.firstChild) {
+      zoo.innerHTML = shuffle(ANIMALS).slice(0, 7).map((a) =>
+        `<div class="mini" style="background:${a.bg}">${svgOf(a)}</div>`).join('');
+    }
+  };
+
+  /* =============== Game =============== */
+  const stopTimer = () => { clearInterval(timerId); timerId = null; };
+  const tick = () => {
+    elapsed = Math.floor((Date.now() - t0) / 1000);
+    $('time').textContent = fmt(elapsed);
+  };
+
+  const startGame = (key) => {
+    level = key;
+    gameToken++;
+    stopTimer();
+    first = null; lock = false; moves = 0; found = 0; started = false; elapsed = 0;
+    $('moves').textContent = '0';
+    $('time').textContent = '0:00';
+    $('levelTag').textContent = `רמה: ${LEVELS[key].label} · ${LEVELS[key].pairs} זוגות`;
+    $('win').classList.remove('show');
+
+    const chosen = shuffle(ANIMALS).slice(0, LEVELS[key].pairs);
+    deck = spreadDeck(chosen);
+
+    const board = $('board');
+    board.textContent = '';
+    deck.forEach((a, i) => {
+      const b = document.createElement('button');
+      b.className = 'card';
+      b.type = 'button';
+      b.dataset.i = i;
+      b.setAttribute('aria-label', `קלף מוסתר ${i + 1}`);
+      b.innerHTML = `<div class="inner">
+        <div class="face back"><svg viewBox="0 0 100 100" aria-hidden="true" fill="#fff">
+          <ellipse cx="50" cy="64" rx="19" ry="16"/><circle cx="26" cy="42" r="8.5"/><circle cx="41" cy="28" r="8.5"/>
+          <circle cx="59" cy="28" r="8.5"/><circle cx="74" cy="42" r="8.5"/></svg></div>
+        <div class="face front" style="--bg:${a.bg}">${svgOf(a)}</div></div>`;
+      b.addEventListener('click', () => onCard(b, i));
+      board.appendChild(b);
+    });
+    show('game');
+    layout();
+    $('status').textContent = 'משחק חדש התחיל';
+  };
+
+  const onCard = (el, i) => {
+    if (lock || el.classList.contains('flipped') || el.classList.contains('matched')) return;
+    audio();
+    if (!started) {
+      started = true; t0 = Date.now();
+      timerId = setInterval(tick, 250);
+    }
+    el.classList.add('flipped');
+    el.setAttribute('aria-label', deck[i].name);
+    sfx.flip();
+
+    if (first === null) { first = i; return; }
+
+    const a = first, b = i;
+    first = null;
+    moves++;
+    $('moves').textContent = moves;
+    const cards = $('board').children;
+    const ca = cards[a], cb = cards[b];
+
+    if (deck[a].id === deck[b].id) {
+      lock = true;
+      setTimeout(() => {
+        ca.classList.add('matched'); cb.classList.add('matched');
+        ca.disabled = cb.disabled = true;
+        sfx.match();
+        $('status').textContent = `יפה! מצאת ${deck[a].name}`;
+        found++;
+        lock = false;
+        if (found === deck.length / 2) setTimeout(win, 650);
+      }, 350);
+    } else {
+      lock = true;
+      const token = gameToken;
+      setTimeout(() => {
+        if (token !== gameToken) return;
+        ca.classList.add('wrong'); cb.classList.add('wrong');
+        sfx.wrong();
+      }, 250);
+      setTimeout(() => {
+        if (token !== gameToken) return;
+        [ca, cb].forEach((c, k) => {
+          c.classList.remove('flipped', 'wrong');
+          c.setAttribute('aria-label', `קלף מוסתר ${(k ? b : a) + 1}`);
+        });
+        lock = false;
+      }, 1000);
+    }
+  };
+
+  const win = () => {
+    stopTimer();
+    tick();
+    const result = { moves, time: elapsed };
+    const best = loadBest();
+    const better = isBetter(result, best[level]);
+    if (better) { best[level] = result; saveBest(best); }
+    $('winMoves').textContent = moves;
+    $('winTime').textContent = fmt(elapsed);
+    $('winRecord').textContent = better ? '🏆 שיא חדש!' : '';
+    const hero = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+    const h = $('winHero');
+    h.style.background = hero.bg;
+    h.innerHTML = svgOf(hero);
+    $('win').classList.add('show');
+    $('btnAgain').focus();
+    sfx.win();
+    confetti();
+  };
+
+  /* ---- fit the grid to the screen (no scrolling) ---- */
+  const layout = () => {
+    const wrap = $('boardWrap');
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    const n = deck.length;
+    if (!n || !W || !H) return;
+    const gap = Math.max(6, Math.min(12, Math.round(Math.min(W, H) / 50)));
+    let best = { s: 0, cols: 2 };
+    for (let cols = 2; cols <= n; cols++) {
+      if (n % cols) continue;
+      const rows = n / cols;
+      const s = Math.min((W - gap * (cols - 1)) / cols, (H - gap * (rows - 1)) / rows);
+      if (s > best.s) best = { s, cols };
+    }
+    const size = Math.floor(Math.min(best.s, 150));
+    const board = $('board');
+    board.style.setProperty('--s', size + 'px');
+    board.style.gridTemplateColumns = `repeat(${best.cols}, ${size}px)`;
+    board.style.gap = gap + 'px';
+  };
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', () => setTimeout(layout, 200));
+  if (window.ResizeObserver) new ResizeObserver(layout).observe($('boardWrap'));
+
+  /* =============== Buttons =============== */
+  const goHome = () => {
+    gameToken++; stopTimer(); lock = false;
+    $('win').classList.remove('show');
+    renderStart();
+    show('start');
+  };
+  $('btnHome').addEventListener('click', goHome);
+  $('btnLevels').addEventListener('click', goHome);
+  $('btnRestart').addEventListener('click', () => startGame(level));
+  $('btnAgain').addEventListener('click', () => startGame(level));
+  $('btnMute').addEventListener('click', () => {
+    muted = !muted;
+    const b = $('btnMute');
+    b.textContent = muted ? '🔇' : '🔊';
+    b.setAttribute('aria-label', muted ? 'הפעלת צלילים' : 'השתקת צלילים');
+    if (!muted) sfx.flip();
+  });
+
+  renderStart();
+
+  /* offline support (needs https or localhost; silently skipped otherwise) */
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+
+  /* hooks for automated testing */
+  window.__memory = { ANIMALS, LEVELS, get deck() { return deck; } };
+})();
+</script>
+</body>
+</html>
